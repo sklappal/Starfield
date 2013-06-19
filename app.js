@@ -2,14 +2,34 @@ function App() {
   
   var that = this;
   
-  var pointCount = 500;
+  var pointCount = 800;
   var velocity = 1;
   
   var WIDTH = GetCanvas().width;
   var HEIGHT = GetCanvas().height;
   
+  var curTime = new Date().getTime();
+  var prevTime = 0;
+  
+  var colorLUT = [];
+  
+  function GetFrameTime() {
+    return curTime - prevTime;
+  }
+  
   function CreatePoint() {
     return {pos: [100 * (Math.random() - 0.5), 100 * (Math.random() - 0.5), 200], size: Math.random() * 200};
+  }
+  
+  function Init() {
+    InitColorLUT()
+    InitPoints();
+  }
+  
+  function InitColorLUT() {
+    for (var i = 0; i < 256; i++) {
+      colorLUT.push("rgb(" + i + ", " + i + ", " + i + ")");
+    }
   }
   
   function InitPoints() {
@@ -18,6 +38,9 @@ function App() {
       that.points.push(CreatePoint());
       that.points[i].pos[2] *= Math.random(); // Start with random Z
     }
+    
+    that.points.sort(function(p1, p2) { return p1.pos[2] - p2.pos[2]; })
+    
   }
   
   function StillVisible(point) {
@@ -43,12 +66,13 @@ function App() {
     var ctx = GetContext();
     ctx.clearRect(0, 0, WIDTH, HEIGHT);    
 
-    for (var i = 0; i < that.points.length; i++) {
+    for (var i = that.points.length-1; i >= 0; i--) { // Draw from back to front
       var onScreen = WorldToScreen(that.points[i].pos);
-      var scaler = 1.0 / that.points[i].pos[2];
+      var pos = that.points[i].pos;
+      var scaler = 1.0 / Math.sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
       var rgb = Math.min(255, Math.floor(255.0*scaler*25));
       
-      var color = "rgb(" + rgb + ", " + rgb + ", " + rgb + ")";
+      var color = colorLUT[rgb];
       
       FilledCircle(onScreen[0], onScreen[1], that.points[i].size * scaler, color);
     }
@@ -68,33 +92,33 @@ function App() {
   
   
   var CalculateFPS = function() {
-    var lastTime = 0;
-    var fps = 0;
     var fpsFilter = 0.01;
     var frameTime = 1.0/60.0 * 1000;
     
     return function() {
-      var timeNow = new Date().getTime();
-      if (lastTime != 0) {
-        var elapsed = timeNow - lastTime;
-        frameTime = (1-fpsFilter) * frameTime + fpsFilter * elapsed;
-        fps = 1.0 / frameTime * 1000.0;
-      }
-      lastTime = timeNow;
-      return fps;
+      var elapsed = GetFrameTime();
+      frameTime = (1-fpsFilter) * frameTime + fpsFilter * elapsed;
+      return 1.0 / frameTime * 1000.0;
     }
   }();
   
    
   function Animate() {
     var newPoints = [];
+    var elapsed = GetFrameTime();
     for (var i = 0; i < that.points.length; i++) {
-      that.points[i].pos[2] -= velocity;
+      that.points[i].pos[2] -= velocity * elapsed * 0.1;
       
-      if (!StillVisible(that.points[i].pos)) {
-        that.points[i] = CreatePoint();
+      if (StillVisible(that.points[i].pos)) {
+        newPoints.push(that.points[i]);
       }
     }
+    
+    while (newPoints.length < pointCount) {
+      newPoints.push(CreatePoint());
+    }
+    that.points = newPoints;
+    
   }
   
   function FilledCircle(posx, posy, radius, color) {
@@ -119,6 +143,8 @@ function App() {
   
   function tick() {
     requestAnimFrame(tick);
+    prevTime = curTime;
+    curTime = new Date().getTime();
     Draw();
     DrawOverlay();
     Animate();
@@ -130,7 +156,7 @@ function App() {
     document.onkeydown = OnKeyDown;
     window.onresize = OnResize;
     OnResize();
-    InitPoints();
+    Init();
     tick();
   }
   
